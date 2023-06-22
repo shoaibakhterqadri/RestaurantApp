@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AiOutlineMenu, AiOutlineShoppingCart } from "react-icons/ai";
 import { RxCross2 } from "react-icons/rx";
 import {
@@ -13,17 +13,20 @@ import {
 } from "../../schema";
 import { useFormik } from "formik";
 import { useSelector, useDispatch } from "react-redux";
-import { logout, saveEmail, saveToken } from "../../redux/slices/User";
+import { logout, saveEmail, saveuserId, setIsPopup } from "../../redux/slices/User";
 import { postApiMethod, updateApiMethod } from "../../Api";
 import UserImage from '../../assets/image/user.png'
+import { HashLoader } from "react-spinners";
 
 const Navbar = ({ setOpen }) => {
   const dispatch = useDispatch()
-  const user = useSelector((state) => state?.user?.token);
+  const user = useSelector((state) => state?.user?.userId);
   const userEmail = useSelector((state) => state?.user?.email);
+  const isPopup = useSelector((state) => state?.user?.isPopup);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoad, setIsLoad] = useState(false)
+  const [mainError, setMainError] = useState('');
   const [modalData, setModalData] = useState("Login");
   const formik = useFormik({
     initialValues: SignupInitialValues, validationSchema: SignupValidationSchema, onSubmit: async (values) => {
@@ -37,12 +40,20 @@ const Navbar = ({ setOpen }) => {
       }
       const postSignupData = await postApiMethod('/user/signup', postObj)
       if (postSignupData?.status == 200) {
-        const token = postSignupData?.data?.token;
-        dispatch(saveToken(token))
+        const id = postSignupData?.data?._id;
+        dispatch(saveuserId(id))
         formik.resetForm();
         setIsModalOpen(false);
+        setModalData('Login')
+      } else {
+        setIsLoad(false)
+        setMainError('User Already Exist');
+        setTimeout(() => {
+          setMainError('');
+        }, 5000);
+
       }
-      setIsLoad(true)
+      setIsLoad(false)
 
 
     }
@@ -51,46 +62,70 @@ const Navbar = ({ setOpen }) => {
     initialValues: SigninInitialValues,
     validationSchema: SigninValidationSchema,
     onSubmit: async (values) => {
+      setIsLoad(true)
       const { email, password } = values
       const postObj = { email, password }
       const { data, status } = await postApiMethod('/user/login', postObj)
       if (status == 200) {
-        dispatch(saveToken(data?.token))
-        formik.resetForm()
+        dispatch(saveuserId(data?._id))
+        SigninFormik.resetForm()
         setIsModalOpen(false);
-        setIsLoad(true)
+        setIsLoad(false)
+      } else {
+        setIsLoad(false)
+        setMainError('Invalid Email or Password');
+        setTimeout(() => {
+          setMainError('');
+        }, 5000);
       }
-      setIsLoad(true)
+      setIsLoad(false)
 
     }
   })
   const ForgetFormik = useFormik({
     initialValues: ForgetInitialValues, validationSchema: ForgetValidationSchema, onSubmit: async (values) => {
+      setIsLoad(true)
       const { email } = values
+
       const postObj = { email }
       const { data, status } = await postApiMethod('/user/checkEmail', postObj)
       if (status == 200) {
         dispatch(saveEmail(email))
         setModalData('Update')
-        formik.resetForm()
+        ForgetFormik.resetForm()
       }
-      setIsLoad(true)
+      else {
+        setIsLoad(false)
+        setMainError('User Not Found');
+        setTimeout(() => {
+          setMainError('');
+        }, 5000);
+
+      }
+      setIsLoad(false)
     }
   })
   const UpdateFormik = useFormik({
     initialValues: UpdateInitialValues, validationSchema: UpdateValidationSchema, onSubmit: async (values) => {
       const { password, confirmPassword } = values
-      // updateApiMethod
+      setIsLoad(true)
       const updateObj = { password, confirmPassword, email: userEmail }
       const { data, status } = await updateApiMethod('/user/updatePass', updateObj)
       if (status == 200) {
-        console.log("🚀data:", data)
+        setIsLoad(false)
         dispatch(saveEmail(''))
+        dispatch(saveuserId(data?._id))
         UpdateFormik.resetForm()
         setIsModalOpen(!isModalOpen)
 
+      } else {
+        setIsLoad(false)
+        setMainError('Server is not responding');
+        setTimeout(() => {
+          setMainError('');
+        }, 5000);
       }
-      setIsLoad(true)
+      setIsLoad(false)
     }
   })
   const toggleMenu = () => {
@@ -105,6 +140,18 @@ const Navbar = ({ setOpen }) => {
     dispatch(logout())
 
   }
+
+
+  useEffect(() => {
+    if (isPopup) {
+      dispatch(setIsPopup(false))
+      setModalData('Login')
+      setIsModalOpen(true)
+    }
+  }, [isPopup])
+
+
+
   return (
     <header className="bg-[#000021] shadow-xl">
       <nav className="flex justify-between items-center w-[92%] mx-auto py-2">
@@ -163,13 +210,12 @@ const Navbar = ({ setOpen }) => {
                 <div>
                   <img src={UserImage} alt="Avatar" className="h-12 w-15 rounded-full cursor-pointer" onClick={toggleDialog} />
                 </div>
-                {!isOpen && (
+                {isOpen && (
                   <div className="absolute top-0 right-12 mt-10 bg-white p-2 rounded-lg shadow w-40 text-sm text-[#000021] dark:text-gray-200">
                     <button className="block w-full text-left hover:bg-gray-100 dark:hover:text-white py-1 px-2"
                       onClick={handleLogout}
                     >Logout</button>
-                    <button className="block w-full text-left hover:bg-gray-100 dark:hover:text-white py-1 px-2"
-                    >Profile</button>
+
                   </div>
                 )}
               </div>
@@ -177,6 +223,7 @@ const Navbar = ({ setOpen }) => {
               className="bg-[#fff] text-[#000021] px-5 py-2 rounded-full hover:bg-[#fff]"
               onClick={() => {
                 setIsModalOpen(!isModalOpen);
+                setModalData('Login')
               }}
             >
               Sign in
@@ -262,11 +309,14 @@ const Navbar = ({ setOpen }) => {
                   }}>
                     Forgot Password?
                   </div>
+                  {mainError && <span className="col-12 text-start mx-4 text-red-600">{mainError}</span>}
+
                   <button
                     className="w-full py-2 mt-5 bg-[#161c4A] hover:bg-[#161c4A] relative text-white rounded-full"
                     type="submit"
+                    disabled={isLoad}
                   >
-                    Sign In
+                    {isLoad ? <HashLoader color="#fff" size={20} /> : 'Sign In'}
                   </button>
                   <div
                     className="flex justify-center text-[#161c4A] underline mx-4 mt-4 cursor-pointer"
@@ -339,11 +389,13 @@ const Navbar = ({ setOpen }) => {
                         </span>
                       ) : null}
                     </div>
+                    {mainError && <span className="col-12 text-start mx-4 text-red-600">{mainError}</span>}
                     <button
                       className="w-full py-2 mt-5 bg-[#161c4A] hover:bg-[#161c4A] relative text-white rounded-full"
                       type="submit"
+                      disabled={isLoad}
                     >
-                      Sign Up
+                      {isLoad ? <HashLoader color="#fff" size={20} /> : 'Sign Up'}
                     </button>
 
                     <div className="flex justify-center text-[#161c4A] underline mx-4 mt-4 cursor-pointer" onClick={() => {
@@ -378,12 +430,14 @@ const Navbar = ({ setOpen }) => {
                         </span>
                       ) : null}
                     </div>
+                    {mainError && <span className="col-12 text-start mx-4 text-red-600">{mainError}</span>}
                     <button
                       className="w-full py-2 mt-5 bg-[#161c4A] hover:bg-[#161c4A] relative text-white rounded-full"
                       type="button"
                       onClick={ForgetFormik.submitForm}
+                      disabled={isLoad}
                     >
-                      Next
+                      {isLoad ? <HashLoader color="#fff" size={20} /> : 'Next'}
                     </button>
                   </form> : modalData == "Update" ? <form className="bg-white p-5 rounded" onSubmit={UpdateFormik.handleSubmit}>
                     <div className="flex justify-end">
@@ -429,12 +483,14 @@ const Navbar = ({ setOpen }) => {
                         </span>
                       ) : null}
                     </div>
+                    {mainError && <span className="col-12 text-start mx-4 text-red-600">{mainError}</span>}
                     <button
                       className="w-full py-2 mt-5 bg-[#161c4A] hover:bg-[#161c4A] relative text-white rounded-full"
                       type="button"
                       onClick={UpdateFormik.submitForm}
+                      disabled={isLoad}
                     >
-                      Update
+                      {isLoad ? <HashLoader color="#fff" size={20} /> : 'Update'}
                     </button>
                   </form> : <></>}
             </div>
