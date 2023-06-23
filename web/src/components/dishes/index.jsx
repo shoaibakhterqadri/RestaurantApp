@@ -1,53 +1,28 @@
-import React, { useEffect, useState, Fragment } from "react";
+import React, { useEffect, useRef } from "react";
+import { Fragment, useState } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { getApiMethod, postApiMethod } from "../../Api";
-import { useDispatch, useSelector } from "react-redux";
-import { setIsPopup } from "../../redux/slices/User";
-import { ToastContainer, toast } from "react-toastify";
-import { HashLoader } from "react-spinners";
+import { getApiMethod } from "../../Api";
+import Slider from 'react-slick';
 
 const Dishes = ({ open, setOpen }) => {
   const [dishes, setDishes] = useState([])
   const [backupDishData, setbackupDishData] = useState([])
   const [filterBarData, setfilterBarData] = useState([])
   const [activeCategory, setactiveCategory] = useState(0)
-  const [isLoad, setisLoad] = useState(false)
-  const [cartLoad, setcartLoad] = useState(false)
-  const dispatch = useDispatch()
   let [product, setProduct] = useState([])
-  const userId = useSelector((state) => state?.user?.userId);
 
   const init = async () => {
     const [{ data, status }, getCategory] = await Promise.all([
       getApiMethod("dish/getDishes"),
-      getApiMethod("dish/categories"),
+      getApiMethod("dish/categories")
     ]);
     if (status == 200) {
       const addAllCategorySec = getCategory?.data
-
       addAllCategorySec?.unshift('All')
       setfilterBarData(addAllCategorySec)
-      const addClickProperty = data?.map((item) => {
-        return { ...item, isClicked: false }
-      })
-      setDishes(addClickProperty)
-      setbackupDishData(addClickProperty)
-    }
-  }
-
-  const getCartProducts = async () => {
-    const [getCartItem] = await Promise.all([getApiMethod(`cart/getCartItemsById/${userId}`)]);
-    let cartArray = getCartItem?.data;
-    if (cartArray?.length > 0 && getCartItem?.status == 200) {
-      // const dishArray = cartArray?.map(item => item.dish);
-      const dishArray = []?.concat(...cartArray.map(item => item.dish));
-      const makeProductArray = dishArray?.map((item) => {
-        return {
-          ...item, qty: item?.quantity, isOrdered: true, isClicked: true, actualPrice: item?.price, discription: item?.discription, image: item?.Image
-        }
-      })
-      setProduct(makeProductArray)
+      setDishes(data)
+      setbackupDishData(data)
     }
   }
 
@@ -63,27 +38,17 @@ const Dishes = ({ open, setOpen }) => {
     }
 
   }
+
   useEffect(() => {
     init()
   }, [])
-  useEffect(() => {
-    getCartProducts()
-  }, [cartLoad])
-  const addToCartItemFunc = (dish, index) => {
+
+  const addToCartItemFunc = (dish) => {
     const filteredArray = product?.filter(({ _id }) => _id == dish?._id);
     if (filteredArray?.length > 0) {
     } else {
-      // Selected True
-      const isClickedTrue = [...dishes]
-      let currentObj = isClickedTrue[index]
-      currentObj.isClicked = true
-      isClickedTrue?.splice(index, 1, currentObj)
-      setDishes(isClickedTrue)
-
-
-      // Product Add
       setProduct((previous) => {
-        const addQty = { ...dish, qty: 1, actualPrice: dish?.price, isOrdered: false }
+        const addQty = { ...dish, qty: 1, actualPrice: dish?.price }
         const data = [...previous, addQty]
         return data
       })
@@ -105,69 +70,9 @@ const Dishes = ({ open, setOpen }) => {
       setProduct(updateProduct)
     }
   }
-  const placeOrder = async () => {
-    if (!userId) {
-      setOpen(!open)
-      dispatch(setIsPopup(true))
-    } else {
-      const removeOrderedFood = product?.filter(({ isOrdered }) => {
-        return isOrdered == false
-      })
-      setisLoad(true)
-      const total = removeOrderedFood?.reduce((acc, { price }) => {
-        return acc + price
-      }, 0).toFixed(2)
-      const makePostArray = removeOrderedFood?.map((item) => {
-        return {
-          Image: item?.image,
-          quantity: item?.qty,
-          price: item?.price, orderStatus: 'pending', name: item?.name, userId, discription: item?.discription
-        }
-      })
-      if (makePostArray.length > 0) {
-        const postOrderObj = { userId, dish: makePostArray, total }
-        const { status, data } = await postApiMethod('cart/addToCart', postOrderObj)
-        if (status == 200) {
-          setisLoad(false)
-          setcartLoad(!cartLoad)
-          toast.success(`${data?.message}`, {
-            position: "top-right",
-            autoClose: 1000,
-            hideProgressBar: false,
-            closeOnClick: false,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: "colored",
-          });
-        } else {
-          setisLoad(false)
-        }
-      }
-      setisLoad(false)
-    }
-  }
-  const removeItemsFromCart = (index) => {
-    const filterProduct = [...product]
-    filterProduct?.splice(index, 1)
-    setProduct(filterProduct)
-  }
 
   return (
     <div>
-      <ToastContainer
-        position="top-right"
-        autoClose={2000}
-        limit={1}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick={false}
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover={true}
-        theme="light"
-      />
       <section className="text-white body-font">
         <div className="container px-5 py-8 mx-auto w-[92%]">
           <div className="flex flex-wrap justify-center items-center gap2 mb-3">
@@ -193,8 +98,8 @@ const Dishes = ({ open, setOpen }) => {
 
           <div className="flex flex-wrap -m-4 justify-center items-center">
             {
-              dishes?.map((dish, index) => {
-                return <div className="p-2 lg:w-1/3" key={index}>
+              dishes?.map((dish) => {
+                return <div className="p-2 lg:w-1/3">
                   <div className="bg-[#161c4A] rounded-[30px] border-[4px] border-[#000235e8] py-[24px] px-[24px] cursor-grab shadow-xl">
                     <h1 className="text-3xl mb-6 font-extrabold font-[Poppins]">
                       {dish?.name}
@@ -211,9 +116,9 @@ const Dishes = ({ open, setOpen }) => {
                     </div>
                     <div className="flex items-center justify-between">
                       <button className="bg-[#fff] text-[#000021] px-5 py-2 rounded-full hover:bg-[#fff]" onClick={() => {
-                        addToCartItemFunc(dish, index)
+                        addToCartItemFunc(dish)
                       }}>
-                        {dish?.isClicked ? 'Added' : 'Add to cart'}
+                        Add to cart
                       </button>
                       <div className="text-[24px] font-bold text-[#fff] font-[Poppins]">
                         {dish?.price}
@@ -311,32 +216,25 @@ const Dishes = ({ open, setOpen }) => {
                                         Quantity {product?.qty}
                                       </p>
                                       <div className="flex items-center">
-                                        {
-                                          product?.isOrdered ? <><button></button><button></button></> : <><button className="text-3xl bg-[#fff] text-[#000021] px-5 py-2 rounded-full hover:bg-[#fff]" onClick={() => {
-                                            increaseQty(product, index)
-                                          }}>
-                                            +
-                                          </button>
-                                            <button className="text-3xl bg-[#fff] text-[#000021] px-5 py-2 rounded-full hover:bg-[#fff]" onClick={() => {
-                                              decreaseQty(product, index)
-                                            }}>
-                                              -
-                                            </button></>
-                                        }
-
+                                        <button className="text-3xl bg-[#fff] text-[#000021] px-5 py-2 rounded-full hover:bg-[#fff]" onClick={() => {
+                                          increaseQty(product, index)
+                                        }}>
+                                          +
+                                        </button>
+                                        <button className="text-3xl bg-[#fff] text-[#000021] px-5 py-2 rounded-full hover:bg-[#fff]" onClick={() => {
+                                          decreaseQty(product, index)
+                                        }}>
+                                          -
+                                        </button>
                                       </div>
 
                                       <div className="flex">
-                                        {
-                                          product?.isOrdered ? product?.orderStatus : <button
-                                            onClick={() => { removeItemsFromCart(index) }}
-                                            type="button"
-                                            className="font-medium text-[#000021] hover:text-[#000021]"
-                                          >
-                                            Remove
-                                          </button>
-                                        }
-
+                                        <button
+                                          type="button"
+                                          className="font-medium text-[#000021] hover:text-[#000021]"
+                                        >
+                                          Remove
+                                        </button>
                                       </div>
                                     </div>
                                   </div>
@@ -361,14 +259,26 @@ const Dishes = ({ open, setOpen }) => {
                           Shipping and taxes calculated at checkout.
                         </p>
                         <div className="mt-6">
-                          <div
-                            onClick={placeOrder}
-                            className="cursor-pointer flex items-center justify-center border rounded-full border-transparent bg-[#161c4A] px-6 py-3 text-base font-medium text-white shadow-sm"
+                          <a
+                            href="#"
+                            className="flex items-center justify-center border rounded-full border-transparent bg-[#161c4A] px-6 py-3 text-base font-medium text-white shadow-sm"
                           >
-                            {isLoad ? <HashLoader color="#fff" size={20} /> : 'Place Order'}
-                          </div>
+                            Checkout
+                          </a>
                         </div>
-
+                        <div className="mt-6 flex justify-center text-center text-sm text-gray-500">
+                          <p>
+                            or
+                            <button
+                              type="button"
+                              className="font-medium text-indigo-600 hover:text-indigo-500"
+                              onClick={() => setOpen(false)}
+                            >
+                              Continue Shopping
+                              <span aria-hidden="true"> &rarr;</span>
+                            </button>
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </Dialog.Panel>
@@ -381,4 +291,5 @@ const Dishes = ({ open, setOpen }) => {
     </div>
   );
 };
+
 export default Dishes;
